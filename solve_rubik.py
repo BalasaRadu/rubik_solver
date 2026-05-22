@@ -2,6 +2,7 @@ import sys
 import time
 import serial
 import kociemba
+import tkinter as tk
 
 VALID_COLORS = {'W', 'G', 'Y', 'B', 'R', 'O'}
 PORT_SERIAL = '/dev/ttyUSB0'
@@ -100,6 +101,13 @@ def apply_face_turn(direction):
         base_pos += base_move
         sequence.extend(['closed', cmd, 'open'])
 
+def optimize_sequence(seq):
+    optimized = []
+    for cmd in seq:
+        if not optimized or optimized[-1] != cmd:
+            optimized.append(cmd)
+    return optimized
+
 def generate_robot_sequence(solution_string):
     global sequence, base_pos, cube_pos
     sequence = ['open']
@@ -117,7 +125,7 @@ def generate_robot_sequence(solution_string):
     if base_pos != 1:
         sequence.append('start')
             
-    return sequence
+    return optimize_sequence(sequence)
 
 def serial_connection():
     try:
@@ -141,14 +149,76 @@ def send_command(esp32, cmd):
             
     time.sleep(1)
 
-def main():
-    mode = input("Selecteaza modul (NORMAL/DEBUG): ").strip().upper()
+def get_cube_string_from_gui():
+    root = tk.Tk()
+    root.title("Rubik GUI")
     
-    if mode == "DEBUG":
-        solution = input("Introdu SOLUTION (ex: F R U' B2): ").strip()
+    COLORS = ['U', 'R', 'F', 'D', 'L', 'B']
+    COLOR_HEX = {'U': 'red', 'R': 'green', 'F': 'white', 'D': 'orange', 'L': 'blue', 'B': 'yellow'}
+    
+    state = {f: [f]*9 for f in COLORS}
+    current_color = ['U']
+    result = [""]
+
+    def set_color(c):
+        current_color[0] = c
+
+    def on_click(face, idx, btn):
+        state[face][idx] = current_color[0]
+        btn.config(bg=COLOR_HEX[current_color[0]])
+
+    def generate_string():
+        s = ""
+        for f in COLORS:
+            s += "".join(state[f])
+        result[0] = s
+        root.destroy()
+
+    offsets = {'U': (0, 3), 'L': (3, 0), 'F': (3, 3), 'R': (3, 6), 'B': (3, 9), 'D': (6, 3)}
+
+    for f in COLORS:
+        r_off, c_off = offsets[f]
+        for i in range(9):
+            r = i // 3
+            c = i % 3
+            btn = tk.Button(root, bg=COLOR_HEX[f], width=4, height=2)
+            btn.config(command=lambda f=f, i=i, b=btn: on_click(f, i, b))
+            btn.grid(row=r_off+r, column=c_off+c)
+
+    for i, c in enumerate(COLORS):
+        tk.Button(root, bg=COLOR_HEX[c], text=c, width=4, height=2, command=lambda c=c: set_color(c)).grid(row=10, column=i+2, pady=20)
+
+    tk.Button(root, text="SOLVE", height=2, command=generate_string).grid(row=11, column=3, columnspan=3, pady=10)
+
+    root.mainloop()
+    return result[0]
+
+def main():
+    print("SELECT:")
+    print("1 - NORMAL (Enter manual matrix)")
+    print("2 - DEBUG (Enter direct solution)")
+    print("3 - GUI")
+    mode = input("CHOOSE (1/2/3): ").strip()
+    
+    if mode == "2":
+        solution = input("ENTER SOLUTION (ex: F R U' B2): ").strip()
+        
+    elif mode == "3":
+        cube_string = get_cube_string_from_gui()
+        
+        if len(cube_string) != 54:
+            sys.exit(1)
+            
+        try:
+            solution = kociemba.solve(cube_string)
+            print(f"\nSOLUTION: {solution}")
+        except Exception as e:
+            print(f"\nERROR: INVALID CONFIGURATION! {e}")
+            sys.exit(1)
+            
     else:
         print("="*50)
-        print("READING RUBIK'S CONFIGURATIONS")
+        print("READING RUBIK'S CONFIGURATIONS MANUALLY")
         print("="*50)
         cube_state = {}
         for left, face, right in ORIENTATIONS:
