@@ -58,7 +58,7 @@ def apply_spin(direction):
             base_pos = 0
     elif direction == -1:
         cube_pos['front'], cube_pos['left'], cube_pos['back'], cube_pos['right'] = \
-            cube_pos['left'], cube_pos['front'], cube_pos['right'], cube_pos['back']
+            cube_pos['left'], cube_pos['back'], cube_pos['right'], cube_pos['front']
         if base_pos == 0:
             sequence.extend(['open', 'start'])
             base_pos = 1
